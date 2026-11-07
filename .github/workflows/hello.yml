@@ -1,0 +1,13 @@
+name: hello
+
+on: push
+
+jobs:
+  say-hello:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: echo "Hello from a GitHub runner"
+      - run: pwd
+      - run: ls -la
+      - run: cat README.md
