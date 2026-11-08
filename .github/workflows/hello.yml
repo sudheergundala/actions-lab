@@ -3,7 +3,7 @@ name: hello
 on: 
   push:
     branches: [main]
-    paths-ignore: ["**.md"]
+    paths: [".github/workflows/hello.yml"]
   pull_request:
     branches: [main]
   workflow_dispatch:
