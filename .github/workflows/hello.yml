@@ -1,14 +1,17 @@
 name: hello
 
-on: push
+on: 
+  push:
+    branches: [main]
+    paths-ignore: ["**.md"]
+  pull_requests:
+    branches: [main]
+  workflow_dispatch:
+
 
 jobs:
   say-hello:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - run: echo "Hello from a GitHub runner"
-      - run: pwd
-      - run: ls -la
-      - run: cat README.md
-      - run: echo "commit $GITHUB_SHA triggered by $GITHUB_EVENT_NAME"
+      - run: echo "event=$GITHUB_EVENT_NAME ref=$GITHUB_REF sha=$GITHUB_SHA"
