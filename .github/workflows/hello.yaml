@@ -1,9 +1,0 @@
-name: hello
-on: push
-jobs:
-  say-hello:
-    runs-on: ubuntu-latest
-    steps:
-     - run: echo "Hello from a Github runner"
-     - run: ls -la
-     - run: cat README.md
