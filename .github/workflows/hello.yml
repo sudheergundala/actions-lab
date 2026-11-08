@@ -15,3 +15,5 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - run: echo "event=$GITHUB_EVENT_NAME ref=$GITHUB_REF sha=$GITHUB_SHA"
+      - run: echo "Hello from the feature branch"
+      - run: echo "Second commit on the branch"
