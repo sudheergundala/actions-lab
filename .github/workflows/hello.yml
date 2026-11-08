@@ -11,3 +11,4 @@ jobs:
       - run: pwd
       - run: ls -la
       - run: cat README.md
+      - run: echo "commit $GITHUB_SHA triggered by $GITHUB_EVENT_NAME"
