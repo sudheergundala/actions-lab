@@ -1,0 +1,16 @@
+name: data
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/data.yml"]
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build
+        run: |
+          VERSION="1.0.${GUTHUB_RUN_NUMBER}"
+          echo "Built version $VERSION"
+      - name: Deploy
+        run: echo "Deploying version $VERSION"
