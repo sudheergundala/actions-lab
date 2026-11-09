@@ -19,4 +19,4 @@ jobs:
       - name: Deploy (env variable)
         run: echo "Deploying version $VERSION"
       - name: Deploy (step output)
-        run: echo "Deploying version ${{steps.build.outputs.version}} for ${github.event_name}
+        run: echo "Deploying version ${{steps.build.outputs.version}} for ${github.event_name}"
