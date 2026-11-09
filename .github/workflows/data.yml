@@ -7,6 +7,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.build.outputs.version}}
     steps:
       - name: Build
         id: build
@@ -21,5 +23,5 @@ jobs:
     steps:
       - name: Deploy
         env:
-          VERSION= ${{needs.build.outputs.version}}
+          VERSION: ${{needs.build.outputs.version}}
         run: echo "Deploying version $VERSION"
