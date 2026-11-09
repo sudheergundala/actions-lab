@@ -21,7 +21,7 @@ jobs:
         - name: Build
           id: build
           env:
-            SIMULATE_FAILURE: ${{ imputs.simulate_failure }}
+            SIMULATE_FAILURE: ${{ inputs.simulate_failure }}
           run: |
             set -u
             if [ "$SIMULATE_FAILURE" = "true"]; then
