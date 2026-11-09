@@ -18,8 +18,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-      steps:
-        - name: Deploy
-          env:
-            VERSION= "${{needs.build.outputs.version}}
-          run: echo "Deploying version $VERSION"
+    steps:
+      - name: Deploy
+        env:
+          VERSION= "${{needs.build.outputs.version}}
+        run: echo "Deploying version $VERSION"
