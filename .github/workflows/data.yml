@@ -21,5 +21,5 @@ jobs:
     steps:
       - name: Deploy
         env:
-          VERSION= "${{needs.build.outputs.version}}"
+          VERSION= ${{needs.build.outputs.version}}
         run: echo "Deploying version $VERSION"
