@@ -1,27 +1,46 @@
 name: data
 on:
   workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: "Make the build fail on purpose"
+        type: boolean
+        default: false
   push:
-    branches: [main]
-    paths: [".github/workflows/data.yml"]
+    branches:
+      - main
+    paths:
+      - ".github/workflows/data.yml"
+
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.build.outputs.version}}
-    steps:
-      - name: Build
-        id: build
-        run: |
-          set -u
-          VERSION="1.0.${GITHUB_RUN_NUMBER}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Built version $VERSION"
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy
-        env:
-          VERSION: ${{needs.build.outputs.version}}
-        run: echo "Deploying version $VERSION"
+    build:
+      runs-on: ubuntu-latest
+      outputs:
+        version: ${{ steps.build.outputs.version }}
+      steps:
+        - name: Build
+          id: build
+          env:
+            SIMULATE_FAILURE: ${{ imputs.simulate_failure }}
+          run: |
+            set -u
+            if [ "$SIMULATE_FAILURE" = "true"]; then
+              echo "Simulating a build failure"
+              exit 1
+            fi
+            VERSION="1.0.${GITHUB_RUN_NUMBER}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "Build version $VERSION"
+        - name: Notify on failure
+          if: failure()
+          run: echo "Build failed in run $GITHUB_RUN_NUMBER, someone should look"
+
+    deploy:
+      runs-on: ubuntu-latest
+      needs: build
+      if: github.ref == 'refs/head/main'
+      steps:
+        - name: Deploy
+          env:
+            VERSION: ${{ needs.build.outputs.version }}
+          run: echo "Deploying version $VERSION"
