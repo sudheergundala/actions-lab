@@ -1,0 +1,24 @@
+name: env-levels
+on: workflow_dispatch
+env:
+  REGION: uss-east-1
+
+jobs:
+  first:
+   runs-on: ubuntu-latest
+   env:
+     REGION: eu-west-1
+   steps:
+     - name: no-env
+       run: echo "REGION=$REGION"
+
+     - name: step with own env
+       env:
+         REGION: ap-east-1
+       run: echo "REGION=$REGION"
+
+  second:
+    runs-on: ubuntu-latest
+    steps:
+      - name: different job
+        run: echo "REGION=$REGION"
