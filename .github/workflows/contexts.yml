@@ -1,0 +1,25 @@
+name: contexts
+on: workflow_dispatch
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump the github contexts
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
+        run: echo "$GITHUB_CONTEXT"
+
+      - name: Dump the runner contexts
+        env:
+          RUNNER_CONTEXT: ${{ toJSON(runner) }}
+        run: echo "$RUNNER_CONTEXT"
+
+      - name: Use a few fileds with functions
+        env:
+          ACTOR: ${{ github.actor}}
+          IS_MAIN: ${{ github.ref == 'refs/heads/main' }}
+          IS_FEATURE: ${{ startswith(github.ref == 'refs/heads/feature/') }}
+          SHORT_SHA: ${{ format('{0}', github.sha) }}
+        run: |
+         echo "actore=$ACTOR is_main=$IS_MAIN is_feature=$IS_FEATURE"
+         echo "short sha=${SHORT_SHA:0:7}"
