@@ -48,6 +48,7 @@ jobs:
             COMMIT: ${{ github.sha }}
           run: |
             set -u
+            : "${APP_NAME:?APP_NAME is empty or missing}"
             echo "Deploying $APP_NAME version $VERSION"
             {
             echo "## Deployed $APP_NAME"
