@@ -42,5 +42,19 @@ jobs:
       steps:
         - name: Deploy
           env:
+            APP_NAME: ${{ vars.APP_NAME }}
             VERSION: ${{ needs.build.outputs.version }}
-          run: echo "Deploying version $VERSION"
+            ACTOR: ${{ github.triggering_actor }}
+            COMMIT: ${{ github.sha }}
+          run: |
+            set -u
+            echo "Deploying $APP_NAME version $VERSION"
+            {
+            echo "## Deployed $APP_NAME"
+            echo ""
+            echo "| Item | Value |"
+            echo "|---|---|"
+            echo "| Version | \`$VERSION\` |"
+            echo "| Commit | \`${COMMIT:0:7}\` |"
+            echo "| Triggered by | $ACTOR |"
+            } >> "$GITHUB_STEP_SUMMARY"
