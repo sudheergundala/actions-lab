@@ -18,7 +18,7 @@ jobs:
         env:
           ACTOR: ${{ github.actor}}
           IS_MAIN: ${{ github.ref == 'refs/heads/main' }}
-          IS_FEATURE: ${{ startswith(github.ref == 'refs/heads/feature/') }}
+          IS_FEATURE: ${{ startsWith(github.ref, 'refs/heads/feature/') }}
           SHORT_SHA: ${{ format('{0}', github.sha) }}
         run: |
          echo "actore=$ACTOR is_main=$IS_MAIN is_feature=$IS_FEATURE"
