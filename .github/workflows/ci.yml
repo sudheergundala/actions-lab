@@ -1,0 +1,28 @@
+name: ci
+on:
+  push:
+    branches: [main]
+    paths: ["services/**", ".github/workflows/ci.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["services/**", ".github/workflows/ci.yml"]
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/python-svc
+    steps:
+      - uses: actions/checkout@v5
+      
+      - name: install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: install dependencies exactly as locked
+        run: uv syncked --locked
+
+      - name: Show the python version
+        run: uv run python --version
+
+      - name: Run tests
+        run: uv run pytest -q
