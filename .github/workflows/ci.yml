@@ -32,3 +32,27 @@ jobs:
 
       - name: Run tests
         run: uv run pytest -q
+
+
+  node:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/node-svc
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Node from .nvmrc
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: service/node-svc/.nvmrc
+
+      - name: Install Dependencies exactly as locked
+        run: npm ci
+
+      - name: Show the Node version
+        run: node --version
+
+      - name: Run tests
+        run: npm test
