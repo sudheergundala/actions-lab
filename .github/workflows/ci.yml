@@ -19,7 +19,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: install dependencies exactly as locked
-        run: uv syncked --locked
+        run: uv sync --locked
 
       - name: Show the python version
         run: uv run python --version
