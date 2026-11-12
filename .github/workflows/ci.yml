@@ -77,5 +77,13 @@ jobs:
           java -version
           echo "JAVA_HOME=$JAVA_HOME"
 
+      - name: Show Maven and the local repository before the build
+        run: |
+          mvn -version
+          du -sh ~/.m2/repository 2>/dev/null || echo "$HOME/.m2/repository does not exist yet"
+
       - name: Build and Test
         run: mvn -B test
+
+      - name: Show the local repository after the build
+        run: du -sh ~/.m2/repository
