@@ -9,6 +9,12 @@ on:
 jobs:
   python:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.13", "3.14"]
+    env:
+      UV_PYTHON: ${{ matrix.python }}
     defaults:
       run:
         working-directory: services/python-svc
