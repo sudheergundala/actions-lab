@@ -46,7 +46,7 @@ jobs:
       - name: Install Node from .nvmrc
         uses: actions/setup-node@v5
         with:
-          node-version-file: service/node-svc/.nvmrc
+          node-version-file: services/node-svc/.nvmrc
 
       - name: Install Dependencies exactly as locked
         run: npm ci
