@@ -1,0 +1,32 @@
+name: shell-safety
+
+on: workflow_dispatch
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Default shell (no pipefail)
+        run: |
+          false | tee out.log
+          echo "still running: the failure in the pipe was hidden"
+
+      - name: Explicit bash shell (pipefail on)
+        if: always()
+        shell: bash
+        run: |
+          false | tee out.log
+          echo "You should not see this line"
+
+      - name: Unset variable without -u
+        if: always()
+        run: |
+          echo "Deploying to: ${TARGET_ENV}"
+          echo "Still running with an empty value"
+
+      - name: Unset variable with -u
+        if: always()
+        run: |
+          set -u
+          echo "Deploying to: ${TARGET_ENV}"
+          echo "You should not see this line"
