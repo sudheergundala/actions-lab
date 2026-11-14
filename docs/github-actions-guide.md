@@ -2,7 +2,7 @@
 
 This guide explains everything built and learned in the `actions-lab` repository, in the order it was learned. Every concept has the reason it exists, a small example from this repo, and the mistakes that were actually made along the way, because those mistakes are the best interview stories. Read it top to bottom before an interview and the whole picture fits together.
 
-It covers Levels 0 to 3 so far. New sections are added as each level is finished.
+It covers Levels 0 to 3. New sections are added as each level is finished.
 
 ---
 
@@ -312,7 +312,7 @@ Hooks are not committed to the repository and can be skipped with `git commit --
 
 ---
 
-## Part 6. Orchestration (Level 3, in progress)
+## Part 6. Orchestration (Level 3)
 
 ### The lab application
 
@@ -379,6 +379,123 @@ sudo ln -sfn /opt/homebrew/opt/openjdk/libexec/openjdk.jdk /Library/Java/JavaVir
 
 A DevOps engineer does not write the application, but must know each stack's build contract well enough to own the pipeline: the build and test commands, where dependencies come from and how they are cached, how versions are pinned, where artifacts and test reports go, and how to read a failure. The payoff is triage. A test assertion failure is the developer's problem. A `401 Unauthorized` from Nexus, unresolvable dependencies after repository maintenance, an unsupported release version caused by the wrong JDK, out-of-memory errors in the test runner, and a full disk are infrastructure problems. A lock file out of sync is the developer's change, caught by the pipeline's gate.
 
+### Caching dependencies between runs
+
+Measurements in the lab proved the empty-kitchen cost. A step that printed `du -sh ~/.m2/repository` before the build showed that the folder did not exist on a fresh runner, and after the build it held 15 MB. A re-run downloaded the same 15 MB again, because every job starts on a new machine. Adding one input to the setup action fixed it:
+
+```yaml
+- uses: actions/setup-java@v5
+  with:
+    distribution: temurin
+    java-version: "21"
+    cache: maven
+```
+
+At the start of the job, setup-java computes a cache key from the operating system, the architecture and a hash of every `pom.xml` in the repository, such as `setup-java-Linux-x64-maven-003f53ad...`. If a cache with that key exists, it restores `~/.m2/repository` before Maven runs. In the post-job step, if there was no exact match, it saves the folder under the key. The first run after adding the cache reported a miss and saved; the next run reported a hit, restored about 9 MB of compressed data that unpacked to 15 MB, and the build dropped from about 7.9 seconds to 3.3 seconds. On a real Spring Boot service the saving is minutes per run.
+
+The key is built from the dependency files because they decide which downloads are needed. While `pom.xml` is unchanged the old cache is valid; when someone adds a dependency the hash changes, the key changes, and a new cache is built. That is cache invalidation in practice. Caches are immutable: a saved key is never overwritten, and on a hit the post step does not save again. Caches created on the default branch are available to pull request branches, while a pull request's caches are visible only to that branch, so a pull request cannot poison the main branch's cache. Each repository has a 10 GB cache limit (visible as `artifact_cache_size_limit` in the github context), and caches unused for seven days are evicted. A cache is a speed-up, never a requirement: the build must still pass with an empty cache.
+
+The setup step's own log solved a mystery along the way. Maven printed no download lines, which first looked like a Maven version difference. The real reason was a line in setup-java's log: it adds `-ntp` (no transfer progress) to `MAVEN_ARGS` automatically. Setup steps can change the environment your commands run in, so their logs must be read too. The same log showed setup-java writing `~/.m2/settings.xml`, Maven's file for repository credentials and mirrors, which is where a Nexus mirror is configured later.
+
+### Caching when the build happens inside Docker
+
+When a multi-stage Dockerfile compiles the application, dependencies are downloaded inside the image build, not into the runner's `~/.m2`, so `cache: maven` does nothing for it. The tools there are layer order and BuildKit cache export. The Dockerfile copies only the dependency files first and installs dependencies in their own layer (`COPY pom.xml` then `mvn dependency:go-offline`; `pyproject.toml` and `uv.lock` then `uv sync --locked --no-dev`; `package.json` and `package-lock.json` then `npm ci --omit=dev`), and only then copies the source. A code change then reuses the dependency layer. Because a GitHub runner's Docker cache is also empty, `docker/build-push-action` exports the layer cache with `cache-from: type=gha` and `cache-to: type=gha,mode=max`, or to the registry with `type=registry`. `mode=max` keeps the builder stage's layers, which is where the dependency layer lives. The runtime stage contains only what is needed to run, a JRE and the JAR or a virtual environment without development tools, which makes the image smaller and leaves fewer packages for scanners to report.
+
+Two pipeline designs are common. Building inside Docker gives the same build on every machine and needs only Docker on the runner. Building on the runner with setup actions and then copying the JAR into a simple image is faster to cache, makes test reports easy to publish, and fits publishing the JAR to Nexus before building the image from it.
+
+### Workflow artifacts versus release artifacts
+
+The word artifact means two things. In the build and repository world it is the deployable output, such as a versioned JAR in Nexus or an image in ECR, kept long term and promoted between environments. In GitHub Actions it is any file a run saves before its runner is destroyed, such as test reports, logs, a Terraform plan or a file passed between jobs, kept for days and tied to that run. Deployables are never deployed from workflow artifacts; they are published to a real repository with a version.
+
+### Uploading test reports
+
+```yaml
+- name: Upload test reports
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: java-test-reports
+    path: services/java-svc/target/surefire-reports/
+    retention-days: 7
+    if-no-files-found: error
+```
+
+`if: always()` uploads the reports even when tests fail, which is exactly when they are needed. The path is from the repository root, because `uses:` steps ignore `defaults.run.working-directory`. `if-no-files-found: error` fails loudly when the path is wrong, instead of the default warning. Maven's Surefire plugin writes reports to `target/surefire-reports/` by convention: a `.txt` summary for people and a `TEST-*.xml` file in JUnit XML format for tools. `mvn test` produces no JAR, because the JAR is created by the later `package` phase.
+
+To prove the value, a test was broken on purpose by changing an expected value. The test step went red, the upload step still ran, and the downloaded report showed `expected: <2501> but was: <2500>` at `PriceCalculatorTest.java:13`. When reading a stack trace, skip the framework lines and find the first line in your own package. An assertion failure with expected and actual values is a code or test problem for the developer. The break was undone with `git revert`, which adds a new commit that reverses the old one. On a shared branch history is never rewritten with `reset` and a force push; `git reset --hard origin/main` is only safe for local commits that never reached the remote.
+
+An early attempt showed `Failures: 0` because the break had never been committed; checking the local file, `git log` and `git show origin/main:<path>` in turn found the missing hop.
+
+### Passing a build output between jobs
+
+```yaml
+- name: Upload the JAR
+  uses: actions/upload-artifact@v4
+  with:
+    name: java-svc-jar
+    path: services/java-svc/target/java-svc-0.1.0-SNAPSHOT.jar
+    retention-days: 1
+```
+
+A second job with `needs: java` downloads it with `actions/download-artifact` into `dist/`. The JAR's `sha256sum` was identical in both jobs (`93bc1eab...`), proving the later job used exactly the binary that was built and tested. The artifact actions also verify the uploaded zip's own digest automatically. The verify job needed neither checkout nor setup-java, which follows from three questions asked about every job: does any step use repository files (then checkout), does any step run a language at a specific version (then a setup action), and does any step need a file from another job (then download-artifact and `needs`). The JAR contained `com/stratus/lab/PriceCalculator.class`, `META-INF/MANIFEST.MF` and Maven's embedded `pom.xml` and `pom.properties`, and no test classes.
+
+`with:` passes inputs to an action. Without `with:`, each input uses the default declared in the action's `action.yml`; required inputs must be given; and `with:` belongs only on `uses:` steps, while `run:` steps receive values through `env:`.
+
+### Unique artifact names in a matrix
+
+Every matrix job runs the same upload step, so the name must include the matrix value, such as `python-test-reports-${{ matrix.python }}`. With current versions of the artifact actions, a second upload with the same name in one run fails with a conflict and turns that job red; older versions silently overwrote or merged files.
+
+### Test reports in every language
+
+Every language produces JUnit XML so all reports look and work the same. pytest writes it with `--junitxml=reports/junit.xml`. Node's test runner takes reporter and destination pairs, `--test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=reports/junit.xml`, passed through `npm test -- ...`, where everything after `--` goes to the script. Report folders are git-ignored build output. `git add -A` stages new, changed and deleted files, while `git commit -a` only includes tracked files and can sweep in changes you meant to commit separately.
+
+### Concurrency
+
+```yaml
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+```
+
+Runs with the same group name run one at a time. Grouping by `github.ref` gives each branch and each pull request its own group. Three quick pushes produced three runs; the first two were cancelled with "Canceling since a higher priority waiting request for ci-refs/heads/main exists", and only the newest finished. Many teams cancel only on pull requests and let every commit on `main` keep a result, which helps when finding which commit broke something. Deployments and Terraform applies use `cancel-in-progress: false`, because cancelling halfway can leave partial changes, unsaved state or a held state lock; runs then queue, and only the newest waiting run is kept.
+
+### Service containers
+
+```yaml
+services:
+  postgres:
+    image: postgres:17
+    env:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app-test-only
+      POSTGRES_DB: orders
+    ports:
+      - 5432:5432
+    options: >-
+      --health-cmd "pg_isready -U app -d orders"
+      --health-interval 5s
+      --health-timeout 5s
+      --health-retries 10
+```
+
+A service container starts before the steps and is removed with the job. The job's steps run on the runner, so they connect to `localhost:5432`. The health check makes GitHub wait until the database answers; without it, tests can start before the database is ready and fail only sometimes, which is a flaky test. The integration test skips itself with `pytest.mark.skipif` when `DATABASE_URL` is not set, so it skipped on the Mac and in the matrix jobs and ran against PostgreSQL in the integration job (`3 passed`). `-rs` prints skip reasons so skipped tests are never invisible. A throwaway test database password is not a secret; real credentials always are.
+
+### Shell safety: `-e`, `-u` and `pipefail`
+
+`-e` stops a script at the first failing command, `-u` fails on unset variables, and `-o pipefail` makes a pipeline fail if any command in it fails. Without `shell:`, GitHub runs Linux steps with `bash -e`; with `shell: bash` it uses `bash --noprofile --norc -eo pipefail`, and neither turns on `-u`. A demo proved it: `false | tee out.log` stayed green under the default shell, because a pipe's result is its last command's, and turned red with `shell: bash`. This is the `mvn test | tee build.log` bug where failing tests produce a green step. An unset variable printed an empty value without `-u` and stopped the step with `unbound variable` with it. Real pipelines set `defaults: run: shell: bash` at workflow level and `set -u` in scripts, plus `${VAR:?message}` for required values. `defaults` can sit at workflow or job level; different settings merge and the more specific one wins for the same setting.
+
+Shellcheck, through actionlint, warned `SC2088: Tilde does not expand in quotes` on an echo message. Warnings fail the pre-commit hook. The fix was `$HOME`, which does expand inside double quotes. Suppress a warning only for a specific, understood case, on one line, with a comment explaining why.
+
+### Linting in CI, rulesets and required checks
+
+A `lint` workflow runs actionlint from its pinned Docker image (`rhysd/actionlint:1.7.7`) on every pull request. A branch ruleset on `main` blocks deletions and force pushes, requires a pull request before merging, and requires the `actionlint` check to pass, with an empty bypass list. After that, a direct push to `main` was rejected with a repository rule violation, and a pull request with an invalid event name, committed with `--no-verify` to skip the local hook, failed `actionlint` and could not be merged. The check appears as `lint / actionlint (pull_request)`: workflow, job, event. actionlint checks the schema's words, such as keys, event names and inputs of known actions, but not your own values, and a workflow that fails at runtime, such as the shell-safety demo, is still a valid file.
+
+### The path-filter trap
+
+A required check that never runs blocks a pull request forever. With `paths: [".github/workflows/**"]` on the lint workflow, a pull request changing only `README.md` never triggered it, so the required `actionlint` check stayed "Expected, waiting for status to be reported" and merging was blocked. GitHub does not treat "did not run" as "passed". The fixes are to remove path filters from workflows that provide required checks, to always run the workflow and decide inside the job whether to do the real work, or to require a single aggregator job that `needs` all others and checks their results with `if: always()`. The lab removed the filter through its own pull request, because `main` was protected, then used "Update branch" on the README pull request, which merged the new `main` into it, triggered the check and made it mergeable.
+
+A `sed` command written for inline lists matched nothing in a file that used block-style lists and still exited successfully. Check a tool's result, not only its exit code.
+
 ---
 
 ## Part 7. Interview questions and model answers
@@ -398,5 +515,19 @@ Why do builds pass locally and fail in CI? The usual causes are different runtim
 How do you test against several versions? A matrix runs one copy of the job per value in parallel, with `fail-fast: false` so every failing version is visible.
 
 How do you catch workflow mistakes before they run? actionlint with shellcheck locally, in a pre-commit hook and as a required pull request check, plus testing workflow changes on a branch. Linters catch structural and syntax mistakes; wrong values are only caught by running.
+
+How do you speed up a slow Maven pipeline? Measure first. Cache the local repository keyed on a hash of the pom files, use a repository manager near the runners for cold caches, run independent work in parallel, skip unaffected services with path filters, and keep the build correct on an empty cache.
+
+Your Docker builds in CI re-download dependencies every time. How do you fix it? Copy dependency manifests and install dependencies before copying source, so they get their own cached layer, and export the BuildKit cache to the GitHub Actions cache with `mode=max` or to the registry, because runners start with an empty layer cache.
+
+How do you guarantee the artifact you deploy is the one you tested? Build once, record its checksum or image digest, pass that exact artifact through later stages, deploy images by digest, and sign them.
+
+How do you stop CI wasting resources on rapid pushes, and stop two deployments running at once? A concurrency group per branch or pull request with `cancel-in-progress` for pull requests, and a group per environment without cancellation for deployments and Terraform applies.
+
+A test fails only in CI and the log is truncated. What do you do? Upload the test reports as an artifact with `if: always()`, download them, and read the failing assertion and the first stack frame in your own code. Then compare runtime versions and environment with the local machine.
+
+A pull request is stuck waiting for a required check that never runs. Why? The workflow that reports the check was skipped by a path filter, and a required check must report a result. Remove the filter, decide inside the job, or require one aggregator job.
+
+Why can a step that pipes `mvn test` into `tee` stay green when tests fail? A pipeline's exit code is the last command's. Use `shell: bash`, which enables `pipefail`, or `set -o pipefail` in the script.
 
 When does `if: failure()` run, and why is the job still red? It runs when any earlier step in the job failed. The job stays red because a failure cannot be undone by later successful steps; `continue-on-error: true` is the only way to forgive a step's failure, and it can hide real problems.
