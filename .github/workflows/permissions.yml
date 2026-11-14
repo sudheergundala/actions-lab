@@ -1,0 +1,29 @@
+name: permissions
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  read-only:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Try to create a tag with read-only token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/lab-ro-$GITHUB_RUN_NUMBER" -f sha="$GITHUB_SHA"
+
+  write:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Try to create a tag with contents write
+        env:
+          GT_TOKEN: ${{ github.token }}
+        run: gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/lab-rw-$GITHUB_RUN_NUMBER" -f sha="$GITHUB_SHA"
