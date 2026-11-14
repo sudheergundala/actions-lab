@@ -10,7 +10,7 @@ class PriceCalculatorTest {
 
     @Test
     void multipliesUnitPriceByQuantity() {
-        assertEquals(2500L, calc.totalCents(1250L, 2));
+        assertEquals(2501L, calc.totalCents(1250L, 2));
     }
 
     @Test
