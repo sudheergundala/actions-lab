@@ -1,6 +1,6 @@
 name: shell-safety
 
-on: workflow_dispatch
+on: workflow_dispatchh
 
 jobs:
   demo:
