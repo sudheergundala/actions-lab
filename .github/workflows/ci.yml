@@ -37,8 +37,16 @@ jobs:
         run: uv run python --version
 
       - name: Run tests
-        run: uv run pytest -q
+        run: uv run pytest -q --junitxml=reports/junit.xml
 
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-test-report-${{ matrix.python }}
+          path: services/python-svc/reports/junit.xml
+          retention-days: 7
+          if-no-files-found: error
 
   node:
     runs-on: ubuntu-latest
@@ -61,8 +69,18 @@ jobs:
         run: node --version
 
       - name: Run tests
-        run: npm test
+        run: |
+          mkdir -p reports
+          npm test -- --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=reports/junit.xml
 
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: node test reports
+          path: services/node-svc/reports/junit.xml
+          retention-days: 7
+          if-no-files-found: error
 
   java:
     runs-on: ubuntu-latest
