@@ -83,11 +83,22 @@ jobs:
           mvn -version
           du -sh ~/.m2/repository 2>/dev/null || echo "$HOME/.m2/repository does not exist yet"
 
-      - name: Build and Test
-        run: mvn -B test
+      - name: Build Test and Package
+        run: mvn -B package
+
+      - name: Checksum the JAR
+        run: sha256sum target/java-svc-0.1.0-SNAPSHOT.jar
 
       - name: Show the local repository after the build
         run: du -sh ~/.m2/repository
+      
+      - name: Upload the JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-svc-jar
+          path: services/java-svc/target/java-svc-0.1.0-SNAPSHOT.jar
+          retention-days: 1
+          if-no-files-found: error
 
       - name: Upload test reports
         if: always()
@@ -97,3 +108,19 @@ jobs:
           path: services/java-svc/target/surefire-reports
           retention-days: 7
           if-no-files-found: error
+
+  java-verify:
+    runs-on: ubuntu-latest
+    needs: java
+    steps:
+      - name: Download the JAR built by java job
+        uses: actions/download-artifact@v4
+        with:
+          name: java-svc-jar
+          path: dist
+
+      - name: Inspect the JAR
+        run: |
+          ls -la dist
+          sha256sum dist/*.jar
+          unzip -l dist/*.jar
