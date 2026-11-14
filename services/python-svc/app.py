@@ -4,3 +4,4 @@ def add(a: int, b: int) -> int:
 
 def slugify(text: str) -> str:
     return "-".join(text.lower().split())
+# concurrency test 1

@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
     paths: ["services/**", ".github/workflows/ci.yml"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+  
 jobs:
   python:
     runs-on: ubuntu-latest
