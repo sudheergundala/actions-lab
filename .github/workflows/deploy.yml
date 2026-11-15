@@ -1,0 +1,55 @@
+name: deploy
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Build (stand-in)
+        id: version
+        run: echo "version=1.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+  secret-scope-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Try to read the production secret without the environment
+        env:
+          KEY: ${{ secrets.DEPLOY_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+             echo "No access: The secret is empty outside the production environment"
+          else
+             echo "Unexpected the secret is visible"
+          fi
+
+
+  deploy-production:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://examples.com/actions-lab
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Deploy with the production secret
+        env:
+          DEPLOY_API_KEY: ${{ secrets.DEPLOY_API_KEY }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -u
+          : "${DEPLOY_API_KEY:?DEPLOY_API_KEY is missing}"
+          echo "Deploying version $VERSION"
+          echo "The key is : $DEPLOY_API_KEY"
+          echo "Key length : ${#DEPLOY_API_KEY}"
