@@ -1,0 +1,37 @@
+name: oidc-peek
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  without-id-token:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Can this job ask for a token
+        run: |
+          if [ -z "${ACTION_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "NO token request URL: this job cannot get an OIDC token"
+          else
+            echo "Token request URL present"
+          fi
+
+  with-id-token:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      
+    steps:
+      - name: Get a token and print it claims (never the token itself)
+        run: |
+          token=$(curl -sSf -H "Authorization: bearer ${ACTION_ID_TOKEN_REQUEST_TOKEN:?}" "${ACTION_ID_TOKEN_REQUEST_URL:?}&audience=sts.amazonaws.com" | jq -r .value)
+          echo "::add-mask::$token"
+          payload=$(printf '%s' "$token" | cut -d. -f2 | tr '_-' '/+')
+          while (( ${#payload} % 4 )); do payload="${payload}="; done
+          printf '%s' "$payload" | base64 -d | jq '{iss, aud, sub, repository, ref, event_name, environment, job_workflow_ref, lifetime_seconds: (.exp - .iat)}'        
