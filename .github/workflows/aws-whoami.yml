@@ -1,0 +1,36 @@
+name: aws-whoami
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  whoami: 
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Assume the lab role with OIDC
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_LAB_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: actions-lab-${{ github.run_id }}
+
+      - name: Whoami
+        run: aws sts get-caller-identity
+
+      - name: Prove the role has no permissions
+        run: |
+          if aws s3 ls > /dev/null 2>&1; then
+          echo "UNEXPECTED: the role can list buckets"
+          exit 1
+          fi
+          echo "As designed: s3 ls was denied (the role has zero permissions)"
+    
